@@ -6,11 +6,14 @@ from transformers import (
     HammingDiversityLogitsProcessor, 
     MinLengthLogitsProcessor, 
     LogitsProcessorList,
-    TemperatureLogitsWarper
+    TemperatureLogitsWarper,
+    LogitsProcessor,
+    NoRepeatNGramLogitsProcessor
 )
 import torch
 import numpy as np
 import traceback
+from custom_logits_processors import DynamicBlockingProcessor
 
 model = MBartForConditionalGeneration.from_pretrained(
     'facebook/mbart-large-cc25'
@@ -20,15 +23,15 @@ tokenizer = MBartTokenizer.from_pretrained(
     'facebook/mbart-large-cc25'
 )
 
-example = ''' <s> Dwell on the beauty of life. Watch the stars, and see yourself running with them. '''
+example = ''' </s> The seven steps to a coding career. </s> '''
 
-input_ids = tokenizer([example], max_length=1024, return_tensors='pt')[
+input_ids = tokenizer([example], padding = True, max_length=1024, return_tensors='pt')[
     'input_ids'].cuda()
 
 
 # Group Beam Search test
-num_beams = 24
-num_beam_groups = 6
+num_beams = 96 
+num_beam_groups = 24
 
 # oldFunc = MBartForConditionalGeneration._update_model_kwargs_for_generation
 
@@ -139,20 +142,26 @@ num_beam_groups = 6
 
 generate_args = {
     "input_ids": input_ids, 
-    "min_length": 20,
+    "min_length": input_ids.shape[-1] - 5,
     "num_beams": num_beams, 
     "no_repeat_ngram_size": 3,
+    "encoder_no_repeat_ngram_size":5,
     "decoder_start_token_id": 1, 
-    "num_return_sequences": 24,
+    "num_return_sequences": num_beams,
     "num_beam_groups": num_beam_groups,
-    "diversity_penalty": 0.9,
+    "diversity_penalty": 0.1,
     "use_cache": True
 }
 
 f = MBartForConditionalGeneration.group_beam_search
 
+key_word_arguments = {}
+
+my_input_ids = input_ids
 def g(self, input_ids, beam_scorer, **kwargs):
-    print(kwargs)
+    global my_input_ids
+    kwargs["logits_processor"].insert(0, DynamicBlockingProcessor(my_input_ids, num_beams, num_beam_groups, 0.5))
+    kwargs["logits_processor"].insert(1, NoRepeatNGramLogitsProcessor(2))
     return f(self, input_ids, beam_scorer, **kwargs)
 
 MBartForConditionalGeneration.group_beam_search = g
@@ -162,5 +171,8 @@ outputs = model.generate(
     )
 
 
-for sentence in tokenizer.batch_decode(outputs, skip_special_tokens=True):
-    print(sentence)
+for i, sentence in enumerate(tokenizer.batch_decode(outputs, 
+skip_special_tokens=True
+)):
+    
+    if (i % (num_beams//num_beam_groups)) == 0 :print(sentence)
