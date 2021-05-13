@@ -10,6 +10,7 @@ from transformers import (
     LogitsProcessor,
     NoRepeatNGramLogitsProcessor
 )
+from typing import List
 import torch
 import numpy as np
 import traceback
@@ -23,15 +24,82 @@ tokenizer = MBartTokenizer.from_pretrained(
     'facebook/mbart-large-cc25'
 )
 
-example = ''' </s> The seven steps to a coding career. </s> '''
+# example = ''' </s> The seven steps to a coding career. </s> '''
 
-input_ids = tokenizer([example], padding = True, max_length=1024, return_tensors='pt')[
-    'input_ids'].cuda()
+# input_ids = tokenizer([example], padding = True, max_length=1024, return_tensors='pt')[
+#     'input_ids'].cuda()
 
 
 # Group Beam Search test
-num_beams = 96 
-num_beam_groups = 24
+num_beams = 50
+num_beam_groups = 10
+
+def getInputArgs(input_ids):
+    return {
+        "input_ids": input_ids, 
+        "min_length": input_ids.shape[-1] - 10 if input_ids.shape[-1] - 10 > 0 else 5,
+        "num_beams": num_beams, 
+        "no_repeat_ngram_size": 3,
+        "encoder_no_repeat_ngram_size":5,
+        "decoder_start_token_id": 1, 
+        "num_return_sequences": num_beams,
+        "num_beam_groups": num_beam_groups,
+        "diversity_penalty": 0.1,
+        "use_cache": True
+    }
+
+original_group_beam_search = MBartForConditionalGeneration.group_beam_search
+
+
+# my_input_ids = input_ids
+# def g(self, input_ids, beam_scorer, **kwargs):
+#     global my_input_ids
+#     kwargs["logits_processor"].insert(0, DynamicBlockingProcessor(my_input_ids, num_beams, num_beam_groups, 0.5))
+#     kwargs["logits_processor"].insert(1, NoRepeatNGramLogitsProcessor(2))
+#     return original_group_beam_search(self, input_ids, beam_scorer, **kwargs)
+
+# MBartForConditionalGeneration.group_beam_search = g
+
+# outputs = model.generate(
+#     **generate_args
+#     )
+
+
+# for i, sentence in enumerate(tokenizer.batch_decode(outputs, 
+# skip_special_tokens=True
+# )):
+    
+#     if (i % (num_beams//num_beam_groups)) == 0 :print(sentence)
+
+
+def getParaphrases(sentence: str) -> List[str]:
+    sentence = " </s> " + sentence + " </s> "
+    input_ids = tokenizer([sentence], padding = True, max_length=1024, return_tensors='pt')[
+    'input_ids'].cuda()
+
+    generation_arguments = getInputArgs(input_ids)
+
+    my_input_ids = input_ids
+    def g(self, input_ids, beam_scorer, **kwargs):
+        my_input_ids
+        kwargs["logits_processor"].insert(0, DynamicBlockingProcessor(my_input_ids, num_beams, num_beam_groups, 0.5))
+        kwargs["logits_processor"].insert(1, NoRepeatNGramLogitsProcessor(2))
+        return original_group_beam_search(self, input_ids, beam_scorer, **kwargs)
+
+    MBartForConditionalGeneration.group_beam_search = g
+
+    outputs = model.generate(
+        **generation_arguments
+    )
+
+    torch.cuda.empty_cache()
+
+    return tokenizer.batch_decode(outputs, skip_special_tokens = True)
+
+
+    
+
+
 
 # oldFunc = MBartForConditionalGeneration._update_model_kwargs_for_generation
 
@@ -139,40 +207,3 @@ num_beam_groups = 24
 
 # for sentence in tokenizer.batch_decode(out, skip_special_tokens=True):
 #     print(sentence)
-
-generate_args = {
-    "input_ids": input_ids, 
-    "min_length": input_ids.shape[-1] - 5,
-    "num_beams": num_beams, 
-    "no_repeat_ngram_size": 3,
-    "encoder_no_repeat_ngram_size":5,
-    "decoder_start_token_id": 1, 
-    "num_return_sequences": num_beams,
-    "num_beam_groups": num_beam_groups,
-    "diversity_penalty": 0.1,
-    "use_cache": True
-}
-
-f = MBartForConditionalGeneration.group_beam_search
-
-key_word_arguments = {}
-
-my_input_ids = input_ids
-def g(self, input_ids, beam_scorer, **kwargs):
-    global my_input_ids
-    kwargs["logits_processor"].insert(0, DynamicBlockingProcessor(my_input_ids, num_beams, num_beam_groups, 0.5))
-    kwargs["logits_processor"].insert(1, NoRepeatNGramLogitsProcessor(2))
-    return f(self, input_ids, beam_scorer, **kwargs)
-
-MBartForConditionalGeneration.group_beam_search = g
-
-outputs = model.generate(
-    **generate_args
-    )
-
-
-for i, sentence in enumerate(tokenizer.batch_decode(outputs, 
-skip_special_tokens=True
-)):
-    
-    if (i % (num_beams//num_beam_groups)) == 0 :print(sentence)
