@@ -1,3 +1,6 @@
 .vscode/
 nlp_model.py
 __pycache__/custom_logits_processors.cpython-39.pyc
+__pycache__/nlp_model_english.cpython-39.pyc
+__pycache__/nlp_model.cpython-39.pyc
+__pycache__/server.cpython-39.pyc
