@@ -1,13 +1,15 @@
 from flask import Flask
 from flask_restful import Api, Resource, reqparse
+from flask_cors import CORS
 from nlp_model_english import getParaphrases
 import time
 
 app = Flask(__name__)
+cors = CORS(app, methods=["GET","PUT"], resources={r"/*": {"origins": "*"}})
 api = Api(app)
 
 paraphrasing_args = reqparse.RequestParser()
-paraphrasing_args.add_argument("sentence", type=str, help="The sentence to be paraphrased is required", required=True)
+paraphrasing_args.add_argument("sentence", type=str, help="The sentence to be paraphrased is required" )
 paraphrasing_args.add_argument("diversity", type=float, help="The sentence to be paraphrased")
 
 class ParaphraseApi(Resource):
@@ -23,7 +25,6 @@ class ParaphraseApi(Resource):
         diversity = args["diversity"]
 
         t0 = time.time()
-        print(t0)
         if(sentence != None and type(sentence) == str):
             if(diversity != None and type(diversity) == float and diversity > 0 ):
                 variations = getParaphrases(sentence, diversity)

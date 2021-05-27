@@ -31,7 +31,6 @@ num_beams = 50
 num_beam_groups = 10
 
 def getInputArgs(input_ids, diversity = 0.1):
-    print(input_ids.shape)
     return {
         "input_ids": input_ids, 
         "min_length": input_ids.shape[-1] - 10 if input_ids.shape[-1] - 10 > 0 else 5,
