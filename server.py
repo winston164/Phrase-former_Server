@@ -11,6 +11,7 @@ api = Api(app)
 paraphrasing_args = reqparse.RequestParser()
 paraphrasing_args.add_argument("sentence", type=str, help="The sentence to be paraphrased is required" )
 paraphrasing_args.add_argument("diversity", type=float, help="The sentence to be paraphrased")
+paraphrasing_args.add_argument("exclude",  help="Words to be excluded from results")
 
 class ParaphraseApi(Resource):
 
@@ -23,18 +24,19 @@ class ParaphraseApi(Resource):
         args = paraphrasing_args.parse_args()
         sentence = args["sentence"]
         diversity = args["diversity"]
+        exclude = args["exclude"]
 
-        t0 = time.time()
-        if(sentence != None and type(sentence) == str):
-            if(diversity != None and type(diversity) == float and diversity > 0 ):
-                variations = getParaphrases(sentence, diversity)
-            else:
-                variations = getParaphrases(sentence)
+        if(sentence == None or type(sentence) != str):
+            return {"args": args}
 
-            t1 = time.time()
-            print(t1-t0)
-            return {"data": variations}
-        return {"args": args}
+        diversity = diversity if diversity != None and type(diversity) == float and diversity > 0 else 0.1
+        exclude = exclude if exclude != None and type(exclude) == list else []
+
+        exclude = list(filter(lambda x: type(x) == str, exclude))
+        
+        variations = getParaphrases(sentence, diversity, exclude)
+
+        return {"data": variations}
 
 api.add_resource(ParaphraseApi, "/paraphrase")
 
